@@ -1,3 +1,7 @@
+// ConsoleApplication13.cpp : 定义控制台应用程序的入口点。
+//
+
+#include "stdafx.h"
 #include <vector>
 #include <functional>
 #include <iostream>
@@ -105,6 +109,14 @@ IEnumerator coroutine1()
 		}
 	});
 }
+#define  _for(min,max,i) return For(min,max,[](int i)
+IEnumerator coroutine3()
+{
+	_for(0, 10, i){
+		return yield(i);
+	});
+}
+
 IEnumerator coroutine2()
 {
 	int x = 10;
@@ -135,3 +147,4 @@ int main()
 	}
     return 0;
 }
+
