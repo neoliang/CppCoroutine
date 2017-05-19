@@ -1,4 +1,4 @@
-// ConsoleApplication13.cpp : 定义控制台应用程序的入口点。
+
 //
 
 #include "stdafx.h"
@@ -6,7 +6,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
-
+#include <string>
 
 class CoroutineNode
 {
@@ -14,33 +14,51 @@ public:
 	typedef std::shared_ptr<CoroutineNode> Ptr;
 	typedef std::function<Ptr()> NextDelegate;
 public:
-	CoroutineNode(int v, NextDelegate n):value(v), next(n) {}
+	CoroutineNode(NextDelegate n): next(n) {}
+	virtual ~CoroutineNode() {}
 public:
-	int value;
 	NextDelegate next = nullptr;
+};
+template<typename T>
+class CoroutineNodeImp : public CoroutineNode
+{
+public:
+	CoroutineNodeImp(T v, NextDelegate n)
+		:CoroutineNode(n)
+		, value(v) {}
+	T value;
+
 };
 
 //1.每一个yield return被包装为一个函数（后面表示为Y）,Y函数接收两个函数，参数1为object类型，参数2为一个Y函数
-CoroutineNode::Ptr yield(int v, CoroutineNode::NextDelegate next = nullptr)
+template<typename T>
+CoroutineNode::Ptr yield(T v, CoroutineNode::NextDelegate next = nullptr)
 {
-	return std::make_shared<CoroutineNode>(v,next);
+	return CoroutineNode::Ptr(std::make_shared<CoroutineNodeImp<T>>(v,next));
 }
 
 class IEnumerator 
 {
 	CoroutineNode::Ptr _node;
-	int _current;
+	CoroutineNode::Ptr _current;
 public:
 	IEnumerator(CoroutineNode::Ptr node) :_node(node) {}
-	
-	int Current(){return _current;}
+	template<typename T>
+	T Current(){
+		auto subPtr = std::dynamic_pointer_cast<CoroutineNodeImp<T>>(_current);
+		return subPtr->value;
+	}
+	template<typename T>
+	bool currentIs() {
+		return std::dynamic_pointer_cast<CoroutineNodeImp<T>>(_current) != nullptr;
+	}
 
 	//迭代器的MoveNext调用即调用了一次Y函数，该函数返回一个object，另一个Y函数或者空
 	bool MoveNext()
 	{
 		if (_node != nullptr)
 		{
-			_current = _node->value;
+			_current = _node;
 			_node = _node->next != nullptr ? _node->next() : nullptr;
 			return true;
 		}
@@ -60,16 +78,16 @@ CoroutineNode::Ptr Combine(CoroutineNode::Ptr a, CoroutineNode::Ptr b)
 	}
 	else
 	{
-		CoroutineNode::NextDelegate next = a->next;
-		if (next == nullptr)
+		if (a->next == nullptr)
 		{
-			next = [=](){ return b; };
+			a->next = [=](){ return b; };
 		}
 		else
 		{
-			next = [=](){ return Combine(a->next(), b); };
+			auto next = a->next;
+			a->next = [=](){ return Combine(next(), b); };
 		}
-		return std::make_shared<CoroutineNode>(a->value, next);
+		return a;
 	}
 }
 typedef std::function<CoroutineNode::Ptr(int)> YieldDelegate;
@@ -88,11 +106,13 @@ CoroutineNode::Ptr For(int min, int max, YieldDelegate y)
 
 IEnumerator coroutine()
 {
-	yield_return(1);
+	yield_return(std::string("hello"));
 	yield_return(2);
 	yield_return(10);
+	yield_return(std::string("wolrd"));
 	return yield(5);
 	});	
+	});
 	});
 	});
 }
@@ -120,7 +140,7 @@ IEnumerator coroutine3()
 IEnumerator coroutine2()
 {
 	int x = 10;
-	yield_return(x);
+	yield_return(std::string("hello"));
 	int y = x + 100;
 	yield_return(y);
 	int z = y + 1100;
@@ -140,10 +160,16 @@ IEnumerator coroutine2()
 }
 int main()
 {
-	IEnumerator iter = coroutine2();
+	IEnumerator iter = coroutine();
 	while (iter.MoveNext())
 	{
-		std::cout << iter.Current() << std::endl;
+		if (iter.currentIs<std::string>()) {
+			std::cout << iter.Current<std::string>() << std::endl;
+		}
+		else if (iter.currentIs<int>())
+		{
+			std::cout << iter.Current<int>() << std::endl;
+		}
 	}
     return 0;
 }
